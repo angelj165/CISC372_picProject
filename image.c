@@ -3,6 +3,10 @@
 #include <time.h>
 #include <string.h>
 #include "image.h"
+#include <omp.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -30,8 +34,8 @@ Matrix algorithms[]={
 //          algorithm: The 3x3 kernel matrix to use for the convolution
 //Returns: The new value for this x,y pixel and bit channel
 uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
-    int px,mx,py,my,i,span;
-    span=srcImage->width*srcImage->bpp;
+    int px,mx,py,my;
+    //span=srcImage->width*srcImage->bpp;
     // for the edge pixes, just reuse the edge pixel
     px=x+1; py=y+1; mx=x-1; my=y-1;
     if (mx<0) mx=0;
@@ -58,11 +62,13 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
 //Returns: Nothing
 void convolute(Image* srcImage,Image* destImage,Matrix algorithm){
     int row,pix,bit,span;
-    span=srcImage->bpp*srcImage->bpp;
-    for (row=0;row<srcImage->height;row++){
-        for (pix=0;pix<srcImage->width;pix++){
-            for (bit=0;bit<srcImage->bpp;bit++){
-                destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
+    span = srcImage->bpp * srcImage->bpp;
+    #pragma omp parallel for schedule(static)
+    for (row = 0; row < srcImage->height; row++) {
+        for (pix = 0; pix < srcImage->width; pix++) {
+            for (bit = 0; bit < srcImage->bpp; bit++) {
+                destImage->data[Index(pix, row, srcImage->width, bit, srcImage->bpp)] =
+                    getPixelValue(srcImage, pix, row, bit, algorithm);
             }
         }
     }
@@ -101,7 +107,7 @@ int main(int argc,char** argv){
     }
     enum KernelTypes type=GetKernelType(argv[2]);
 
-    Image srcImage,destImage,bwImage;   
+    Image srcImage,destImage;   
     srcImage.data=stbi_load(fileName,&srcImage.width,&srcImage.height,&srcImage.bpp,0);
     if (!srcImage.data){
         printf("Error loading file %s.\n",fileName);
